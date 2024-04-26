@@ -7,8 +7,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
+from datetime import datetime
 from utils import ITENS
+from db import *
 import time
+import sqlite3
 
 
 # Configurações do Selenium
@@ -30,13 +33,22 @@ def scrape_website(url):
     wait = WebDriverWait(driver, 2)
     
 
-    page_source = driver.page_source
     
     for item, codigo in ITENS.items():
         search_box = wait.until(EC.presence_of_element_located((By.ID, "input-search")))
         search_box.send_keys(item)
         search_box.send_keys(Keys.RETURN)
-        catch_info(driver, codigo)
+
+        price, price_per_kg, metric_unity =  catch_info(driver, codigo)
+
+        id = int(codigo)
+        timestamp = datetime.now()
+        
+        if not produto_inserido(id):
+            insere_produto(id, item, float(price), float(price_per_kg), metric_unity, timestamp)
+        else:
+            update_produto(id, float(price), float(price_per_kg), timestamp)
+
         driver.get(url)
 
     
@@ -55,17 +67,18 @@ def catch_info(driver, codigo):
     card_item = soup.find('button',{'data-product-id':codigo}).parent.parent
 
     price_boilerplate = soup.find('span', {'class': 'product-variation__final-price'})
-
     price_per_kg_boilerplate = soup.find('div', {'class': 'product-variation__fractional-desc'})
 
     price = price_boilerplate.getText().split()[1].replace(',', '.')
 
     if price_per_kg_boilerplate:
         price_per_kg = price_per_kg_boilerplate.text.strip().split()[-1].replace(',', '.')
+        metric_unity = price_per_kg_boilerplate.text.strip().split()[2].lower()
     else:
         price_per_kg = None
+        metric_unity = 'unidade'
 
-    print(price, price_per_kg)
+    return price, price_per_kg, metric_unity
 
 
 if __name__ == "__main__":
